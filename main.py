@@ -2,6 +2,8 @@ import sys
 import string
 import itertools
 import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
 
 VARIABLE_COUNT = 4 # x,y,z,w are allowed, the rest not, use equations_4.txt
@@ -287,10 +289,13 @@ def is_satisfied(equation, Ms):
 
 
 def get_all_satisfied(equations, ast_dict, Ms):
+    n = Ms.shape[-1]
+
     P_dict = {}
     print("building multiplication tables for each formula")
+    log_step_size = 10 if n >= 3 else 100
     for i, (formula, ast) in enumerate(ast_dict.items()):
-        if i % 10 == 0:
+        if i % log_step_size == 0:
             print(i, "/", len(ast_dict))
             sys.stdout.flush()
         P = compute_table(Ms, ast)
@@ -353,19 +358,132 @@ def condense_P(P, n):
     return mult
 
 
+# Function to use networkx for transitive reduction
+def transitive_reduction(M):
+    """
+    Perform transitive reduction on a graph using NetworkX's transitive_reduction function.
+
+    :param M: 2D numpy array representing the adjacency matrix of the DAG
+    :return: 2D numpy array representing the transitive reduction of the DAG
+    """
+
+    M = M.copy()
+    np.fill_diagonal(M, False)
+
+    # Create a directed graph from the adjacency matrix
+    G = nx.from_numpy_array(M, create_using=nx.DiGraph)
+
+    # Get the transitive reduction using NetworkX
+    G_reduced = nx.transitive_reduction(G)
+
+    # Convert the reduced graph back to an adjacency matrix
+    reduced_M_nx = nx.to_numpy_array(G_reduced, dtype=int)
+
+    return np.array(reduced_M_nx)
+
+
+def merge_equivalent_nodes_and_transitive_reduction(M):
+    """
+    Identify equivalent nodes (i.e., nodes that imply each other), collect them,
+    keep only one representative node, and perform transitive reduction.
+    
+    :param M: 2D numpy array representing the adjacency matrix of the DAG
+    :return: 2D numpy array representing the transitive reduction of the DAG with merged equivalent nodes
+    """
+    # Remove diagonal elements (self-loops)
+    np.fill_diagonal(M, 0)
+    
+    # Create a directed graph from the adjacency matrix
+    G = nx.from_numpy_array(M, create_using=nx.DiGraph)
+    
+    # Find equivalent nodes (bidirectional edges mean nodes imply each other)
+    equivalent_sets = []
+    visited = set()
+
+    for u in G.nodes():
+        if u not in visited:
+            # Find all nodes equivalent to u (nodes with bidirectional edges to u)
+            equivalent_nodes = {u}
+            for v in G.nodes():
+                if u != v and G.has_edge(u, v) and G.has_edge(v, u):
+                    equivalent_nodes.add(v)
+            
+            if len(equivalent_nodes) > 1:
+                equivalent_sets.append(equivalent_nodes)
+            visited.update(equivalent_nodes)
+    
+    # Merge equivalent nodes by keeping one representative from each set
+    for eq_set in equivalent_sets:
+        eq_list = list(eq_set)
+        representative = eq_list[0]  # Pick the first node as the representative
+        for node in eq_list[1:]:  # Remove other equivalent nodes
+            G = nx.contracted_nodes(G, representative, node, self_loops=False)
+
+    # Perform transitive reduction on the simplified graph
+    G_reduced = nx.transitive_reduction(G)
+
+    return G_reduced, equivalent_sets
+
+
+def visualize_graph_with_labels(G, equations, output_filename='reduced_graph.png'):
+    """
+    Visualize the graph G using Graphviz with custom labels from 'equations' and save it to an output file.
+    
+    :param G: NetworkX DiGraph object (graph to visualize)
+    :param equations: List of labels (strings) for each node in the matrix
+    :param output_filename: Filename for saving the rendered graph (default: 'reduced_graph.png')
+    """
+    # Create a Graphviz AGraph object for visualization
+    A = nx.drawing.nx_agraph.to_agraph(G)
+    
+    # Apply custom labels from the 'equations' list
+    for i, equation in enumerate(equations):
+        if i in G.nodes():
+            A.get_node(i).attr['label'] = equation
+    
+    # Render the graph to a file (e.g., PNG) and visualize it
+    A.layout(prog='dot')  # Use 'dot' for layout
+    A.draw(output_filename)  # Save as PNG
+    
+    # Optionally display the image using matplotlib
+    img = plt.imread(output_filename)
+    plt.imshow(img)
+    plt.axis('off')  # Turn off axis labels
+    plt.show()
+
+
+def main_hasse_diagram():
+    n = 3
+
+    equations, ast_dict = read_all_equations(sys.stdin.readlines())
+
+    Ms = collect_magmas(n)
+    S = get_all_satisfied(equations, ast_dict, Ms)
+    implications = compute_logical_implication(S)
+    print(f"number of true implications for {n}-magmas", implications.sum(), "out of", implications.size)
+    print(implications.astype(int))
+
+    # reduced_implications = transitive_reduction(implications)
+    G_reduced_implications, equivalent_sets = merge_equivalent_nodes_and_transitive_reduction(implications)
+    print(f"number of primitive implications for {n}-magmas", G_reduced_implications.number_of_edges(),
+        "out of", implications.size, "but now just on", G_reduced_implications.number_of_nodes(), "nodes, not", len(implications))
+    for equivalent_set in equivalent_sets:
+        print("  <=>  ".join(pp_eq(equations[eq_index]) for eq_index in sorted(equivalent_set)))
+
+    visualize_graph_with_labels(G_reduced_implications, [pp_eq(equation) for equation in equations])
+
+
 def main():
     equations, ast_dict = read_all_equations(sys.stdin.readlines())
 
     Ms_2 = collect_magmas(2)
-    Ms_3 = collect_magmas(3)
-
     S_2 = get_all_satisfied(equations, ast_dict, Ms_2)
-    S_3 = get_all_satisfied(equations, ast_dict, Ms_3)
-
     implications_2 = compute_logical_implication(S_2)
-    implications_3 = compute_logical_implication(S_3)
-
     print("number of true implications for 2-magmas", implications_2.sum(), "out of", implications_2.size)
+
+    Ms_3 = collect_magmas(3)
+    S_3 = get_all_satisfied(equations, ast_dict, Ms_3)
+    implications_3 = compute_logical_implication(S_3)
     print("number of true implications for 3-magmas", implications_3.sum(), "out of", implications_3.size)
 
     E = len(equations)
@@ -386,8 +504,10 @@ def main():
                 sys.stdout.flush()
 
 
-# test_given_magmas()
+# test_given_magmas() ; exit()
 
-# test_single_expression_all_magmas()
+# test_single_expression_all_magmas() ; exit()
+
+main_hasse_diagram() ; exit()
 
 main()
