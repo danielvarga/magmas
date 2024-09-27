@@ -4,6 +4,9 @@ import itertools
 import numpy as np
 
 
+VARIABLE_COUNT = 4 # x,y,z,w are allowed, the rest not, use equations_4.txt
+
+
 def tokenize(s):
     tokens = []
     i = 0
@@ -132,10 +135,12 @@ def compute_table(Ms, ast):
     """
     N, n, _, _ = Ms.shape
 
+    assert VARIABLE_COUNT <= 4, "the following code block assumes less than 5 variables"
+
     if ast['type'] == 'var':
         var_name = ast['value']
         # Initialize P_var without the N dimension
-        P_var = np.zeros((n, n, n, n, n))
+        P_var = np.zeros(tuple([n] * (VARIABLE_COUNT + 1)))
         if var_name == 'x':
             for x in range(n):
                 P_var[x, :, :, :, x] = 1  # For all y, z, w
@@ -188,7 +193,7 @@ def test_given_magmas():
     P = compute_table(Ms, ast)
 
     # Verify the shape of P
-    assert P.shape == (N, n, n, n, n, n)
+    assert P.shape == tuple([N] + [n] * (VARIABLE_COUNT + 1))
 
     # Test the correctness of P for each Ms
     for idx in range(N):
@@ -253,8 +258,8 @@ def read_all_equations():
     equations = []
     for l in sys.stdin:
         lhs, rhs = l.split("=")
-        lhs = lhs.strip(" ")
-        rhs = rhs.strip(" ")
+        lhs = lhs.strip()
+        rhs = rhs.strip()
         formulas.add(lhs)
         formulas.add(rhs)
         equations.append((lhs, rhs))
@@ -269,11 +274,19 @@ def read_all_equations():
     return equations, ast_dict
 
 
-def main():
-    equations, ast_dict = read_all_equations()
+# does not use caching of formulas (ast_dict)
+def is_satisfied(equation, Ms):
+    lhs, rhs = equation
+    ast_lhs = parse_expression(tokenize(lhs))
+    ast_rhs = parse_expression(tokenize(rhs))
+    P_lhs = compute_table(Ms, ast_lhs)
+    P_rhs = compute_table(Ms, ast_rhs)
+    # for each magma Ms[i], passing[i] tells if it satisfies equation or not:
+    passing = np.all(np.isclose(P_lhs, P_rhs), axis=tuple(range(1, VARIABLE_COUNT + 2)))
+    return passing
 
-    Ms = collect_magmas(2)
 
+def get_all_satisfied(equations, ast_dict, Ms):
     P_dict = {}
     print("building multiplication tables for each formula")
     for i, (formula, ast) in enumerate(ast_dict.items()):
@@ -291,7 +304,7 @@ def main():
         P_lhs = P_dict[lhs]
         P_rhs = P_dict[rhs]
         # for each magma Ms[i], passing[i] tells if it satisfies equation or not:
-        passing = np.all(np.isclose(P_lhs, P_rhs), axis=tuple(range(1, 6)))
+        passing = np.all(np.isclose(P_lhs, P_rhs), axis=tuple(range(1, VARIABLE_COUNT + 2)))
 
         # print(i, lhs, "=", rhs, "satified by", passing.sum(), "magmas")
         S.append(passing)
@@ -301,8 +314,64 @@ def main():
     print("collected S matrix about which magma satisfies which equation")
     print(f"{S.shape} matrix with {S.sum()} true elements")
 
+    return S
+
+'''
     implications = compute_logical_implication(S)
     print(f"{implications.sum()} logical implications across the {implications.shape} equation pairs.")
+    return implications
+'''
+
+
+def pp_magma(magma):
+    return np.argmax(magma, axis=-1)
+
+
+def pp_eq(equation):
+    return f"{equation[0]} = {equation[1]}"
+
+
+def smallest_diff_index(a, b):
+    # Compute the element-wise difference
+    diff = a != b
+    # Use np.where to find indices where they differ
+    indices = np.where(diff)[0]
+    # Return the smallest index if they differ, else -1
+    return indices[0] if indices.size > 0 else -1
+
+
+def main():
+    equations, ast_dict = read_all_equations()
+
+    Ms_2 = collect_magmas(2)
+    Ms_3 = collect_magmas(3)
+    S_2 = get_all_satisfied(equations, ast_dict, Ms_2)
+    S_3 = get_all_satisfied(equations, ast_dict, Ms_3)
+    implications_2 = compute_logical_implication(S_2)
+    implications_3 = compute_logical_implication(S_3)
+
+    print("number of true implications for 2-magmas", implications_2.sum(), "out of", implications_2.size)
+    print("number of true implications for 3-magmas", implications_3.sum(), "out of", implications_3.size)
+
+    E = len(equations)
+    for i in range(E):
+        for j in range(E):
+            if implications_2[i, j] != implications_3[i, j]:
+                assert implications_2[i, j] > implications_3[i, j], "3-magmas are supposed to have less true implications"
+                print("-------")
+                print(pp_eq(equations[i]), "implies", pp_eq(equations[j]), "for 2-magmas, but not for 3-magmas.")
+
+                print("counterexample:")
+                assert np.all(S_2[i] <= S_2[j])
+                passings_i = S_3[i]
+                passings_j = S_3[j]
+                magma_index = smallest_diff_index(passings_i, passings_j)
+                assert magma_index != -1
+                print(pp_magma(Ms_3[magma_index]))
+
+                # print("is_satisfied i", pp_eq(equations[i]), is_satisfied(equations[i], Ms_3[magma_index][None, ...]))
+                # print("is_satisfied j", pp_eq(equations[j]), is_satisfied(equations[j], Ms_3[magma_index][None, ...]))
+
 
 
 # test_given_magmas()
