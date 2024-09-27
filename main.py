@@ -291,7 +291,8 @@ def get_all_satisfied(equations, ast_dict, Ms):
     print("building multiplication tables for each formula")
     for i, (formula, ast) in enumerate(ast_dict.items()):
         if i % 10 == 0:
-            print(i)
+            print(i, "/", len(ast_dict))
+            sys.stdout.flush()
         P = compute_table(Ms, ast)
         P_dict[formula] = P
 
@@ -299,7 +300,8 @@ def get_all_satisfied(equations, ast_dict, Ms):
     print("evaluating the truth value of each equation for all magmas")
     for i, equation in enumerate(equations):
         if i % 100 == 0:
-            print(i)
+            print(i, "/", len(equations))
+            sys.stdout.flush()
         lhs, rhs = equation
         P_lhs = P_dict[lhs]
         P_rhs = P_dict[rhs]
@@ -380,14 +382,15 @@ def main():
                 magma_index = smallest_diff_index(passings_i, passings_j)
                 assert magma_index != -1
                 print(pp_magma(Ms_3[magma_index]))
+                sys.stdout.flush()
 
+                '''
                 passing_i, P_lhs_i, P_rhs_i = is_satisfied(equations[i], Ms_3[magma_index][None, ...])
                 passing_j, P_lhs_j, P_rhs_j = is_satisfied(equations[j], Ms_3[magma_index][None, ...])
 
                 mult_lhs_i = condense_P(P_lhs_i) ; mult_rhs_i = condense_P(P_rhs_i)
                 mult_lhs_j = condense_P(P_lhs_j) ; mult_rhs_j = condense_P(P_rhs_j)
 
-                '''
                 print(f"multiplication tables for {pp_eq(equations[i])}:")
                 print("LHS", mult_lhs_i)
                 print("RHS", mult_rhs_i)
