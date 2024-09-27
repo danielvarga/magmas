@@ -253,10 +253,10 @@ def test_single_expression_all_magmas():
 
 
 
-def read_all_equations():
+def read_all_equations(lines):
     formulas = set()
     equations = []
-    for l in sys.stdin:
+    for l in lines:
         lhs, rhs = l.split("=")
         lhs = lhs.strip()
         rhs = rhs.strip()
@@ -343,23 +343,25 @@ def smallest_diff_index(a, b):
 
 
 # TODO only works for x,y formulas
-def condense_P(P):
+def condense_P(P, n):
     assert P.shape[0] == 1
     mult = pp_magma(P[0])
-    for z in range(3):
-        for w in range(3):
+    for z in range(n):
+        for w in range(n):
             assert np.allclose(mult[:, :, z, w], mult[:, :, 0, 0])
     mult = mult[:, :, 0, 0]
     return mult
 
 
 def main():
-    equations, ast_dict = read_all_equations()
+    equations, ast_dict = read_all_equations(sys.stdin.readlines())
 
     Ms_2 = collect_magmas(2)
     Ms_3 = collect_magmas(3)
+
     S_2 = get_all_satisfied(equations, ast_dict, Ms_2)
     S_3 = get_all_satisfied(equations, ast_dict, Ms_3)
+
     implications_2 = compute_logical_implication(S_2)
     implications_3 = compute_logical_implication(S_3)
 
@@ -372,8 +374,7 @@ def main():
             if implications_2[i, j] != implications_3[i, j]:
                 assert implications_2[i, j] > implications_3[i, j], "3-magmas are supposed to have fewer true implications"
                 print("-------")
-                # j comes first!!!
-                print(pp_eq(equations[j]), "implies", pp_eq(equations[i]), "for 2-magmas, but not for 3-magmas.")
+                print(pp_eq(equations[i]), "implies", pp_eq(equations[j]), "for 2-magmas, but not for 3-magmas.")
 
                 print("counterexample:")
                 assert np.all(S_2[i] <= S_2[j])
@@ -383,21 +384,6 @@ def main():
                 assert magma_index != -1
                 print(pp_magma(Ms_3[magma_index]))
                 sys.stdout.flush()
-
-                '''
-                passing_i, P_lhs_i, P_rhs_i = is_satisfied(equations[i], Ms_3[magma_index][None, ...])
-                passing_j, P_lhs_j, P_rhs_j = is_satisfied(equations[j], Ms_3[magma_index][None, ...])
-
-                mult_lhs_i = condense_P(P_lhs_i) ; mult_rhs_i = condense_P(P_rhs_i)
-                mult_lhs_j = condense_P(P_lhs_j) ; mult_rhs_j = condense_P(P_rhs_j)
-
-                print(f"multiplication tables for {pp_eq(equations[i])}:")
-                print("LHS", mult_lhs_i)
-                print("RHS", mult_rhs_i)
-                print(f"multiplication tables for {pp_eq(equations[j])}:")
-                print("LHS", mult_lhs_j)
-                print("RHS", mult_rhs_j)
-                '''
 
 
 # test_given_magmas()
