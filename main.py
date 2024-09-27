@@ -1,6 +1,7 @@
-import numpy as np
+import sys
 import string
 import itertools
+import numpy as np
 
 
 def tokenize(s):
@@ -217,6 +218,21 @@ def collect_magmas(n):
     return Ms
 
 
+def compute_logical_implication(S):
+    # Compute the logical NOT of S
+    neg_S = np.logical_not(S)
+    
+    # Use broadcasting to compute the logical OR across all pairs
+    # neg_S[:, None, :] has shape (E, 1, N)
+    # S[None, :, :] has shape (1, E, N)
+    implication = np.logical_or(neg_S[:, None, :], S[None, :, :])  # Shape: (E, E, N)
+    
+    # Check if the implication holds true for all elements in the last axis
+    implication_matrix = np.all(implication, axis=-1)  # Shape: (E, E)
+    
+    return implication_matrix
+
+
 def test_single_expression_all_magmas():
     # Define your expression
     expression = "((x + y) + z) + x"
@@ -231,6 +247,66 @@ def test_single_expression_all_magmas():
     print("calculated all tables")
 
 
-test_given_magmas()
 
-test_single_expression_all_magmas()
+def read_all_equations():
+    formulas = set()
+    equations = []
+    for l in sys.stdin:
+        lhs, rhs = l.split("=")
+        lhs = lhs.strip(" ")
+        rhs = rhs.strip(" ")
+        formulas.add(lhs)
+        formulas.add(rhs)
+        equations.append((lhs, rhs))
+    print(f"{len(equations)} equations from {len(formulas)} formulas.")
+
+    ast_dict = {}
+    for formula in formulas:
+        tokens = tokenize(formula)
+        ast = parse_expression(tokens)
+        ast_dict[formula] = ast
+
+    return equations, ast_dict
+
+
+def main():
+    equations, ast_dict = read_all_equations()
+
+    Ms = collect_magmas(2)
+
+    P_dict = {}
+    print("building multiplication tables for each formula")
+    for i, (formula, ast) in enumerate(ast_dict.items()):
+        if i % 10 == 0:
+            print(i)
+        P = compute_table(Ms, ast)
+        P_dict[formula] = P
+
+    S = []
+    print("evaluating the truth value of each equation for all magmas")
+    for i, equation in enumerate(equations):
+        if i % 100 == 0:
+            print(i)
+        lhs, rhs = equation
+        P_lhs = P_dict[lhs]
+        P_rhs = P_dict[rhs]
+        # for each magma Ms[i], passing[i] tells if it satisfies equation or not:
+        passing = np.all(np.isclose(P_lhs, P_rhs), axis=tuple(range(1, 6)))
+
+        # print(i, lhs, "=", rhs, "satified by", passing.sum(), "magmas")
+        S.append(passing)
+
+    S = np.array(S)
+
+    print("collected S matrix about which magma satisfies which equation")
+    print(f"{S.shape} matrix with {S.sum()} true elements")
+
+    implications = compute_logical_implication(S)
+    print(f"{implications.sum()} logical implications across the {implications.shape} equation pairs.")
+
+
+# test_given_magmas()
+
+# test_single_expression_all_magmas()
+
+main()
