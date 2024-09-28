@@ -5,6 +5,7 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from PIL import Image
 
 
 
@@ -482,7 +483,7 @@ def visualize_graph_with_labels_using_plotly(G, equations):
     )
 
     # Create scatter trace for hover points on edges
-    edge_hovertexts = [f'{edge[0]} -> {edge[1]}' for edge in G.edges()]
+    edge_hovertexts = [f'({edge[0] + 1}) -> ({edge[1] + 1})' for edge in G.edges()]
     edge_hover_trace = go.Scatter(
         x=[(pos[edge[0]][0] + pos[edge[1]][0]) / 2 for edge in G.edges()],  # Midpoint x
         y=[(pos[edge[0]][1] + pos[edge[1]][1]) / 2 for edge in G.edges()],  # Midpoint y
@@ -497,7 +498,7 @@ def visualize_graph_with_labels_using_plotly(G, equations):
         x=x_nodes, y=y_nodes,
         mode='markers+text',
         marker=dict(size=20, color='lightblue', line=dict(width=2)),
-        text=[equations[node] for node in G.nodes()],  # Text for nodes
+        text=[equations[node] + f" ({node + 1})" for node in G.nodes()],  # Text for nodes
         hoverinfo='text',
         textposition="bottom center"
     )
@@ -541,9 +542,28 @@ def visualize_graph_with_labels_using_plotly(G, equations):
     fig.write_html("hasse.html")
 
 
+def implications_to_image(implications):
+    # Define the colors
+    UNKNOWN_COLOR = (0, 0, 0)
+    KNOWN_IMPLIES_COLOR = (0, 255, 0)
+    KNOWN_NOT_IMPLIES_COLOR = (255, 0, 0)
+
+    # Create a 3D array for the image where each pixel has 3 values (R, G, B)
+    image_shape = implications.shape
+    pixel_array = np.zeros((image_shape[0], image_shape[1], 3), dtype=np.uint8)
+
+    # Apply colors using numpy indexing
+    pixel_array[implications] = UNKNOWN_COLOR  # Where True
+    pixel_array[~implications] = KNOWN_NOT_IMPLIES_COLOR  # Where False
+
+    # Convert the pixel array to an image
+    img = Image.fromarray(pixel_array, "RGB")
+    
+    return img
+
 
 def main_hasse_diagram():
-    n = 3
+    n = 2
 
     equations, ast_dict = read_all_equations(sys.stdin.readlines())
 
@@ -552,6 +572,9 @@ def main_hasse_diagram():
     implications = compute_logical_implication(S)
     print(f"number of true implications for {n}-magmas", implications.sum(), "out of", implications.size)
     print(implications.astype(int))
+
+    img = implications_to_image(implications)
+    img.save("implications.png")
 
     # reduced_implications = transitive_reduction(implications)
     G_reduced_implications, equivalent_sets = merge_equivalent_nodes_and_transitive_reduction(implications)
