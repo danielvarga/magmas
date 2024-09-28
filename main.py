@@ -146,7 +146,7 @@ def compute_table(Ms, ast):
     if ast['type'] == 'var':
         var_name = ast['value']
         # Initialize P_var without the N dimension
-        P_var = np.zeros(tuple([n] * (VARIABLE_COUNT + 1)))
+        P_var = np.zeros(tuple([n] * (VARIABLE_COUNT + 1)), dtype=np.uint8)
         if var_name == 'x':
             for x in range(n):
                 P_var[x, :, :, :, x] = 1  # For all y, z, w
@@ -224,7 +224,7 @@ def collect_magmas(n):
     Ms = np.equal(
         magmas[:, :, :, np.newaxis],     # Shape: (N, n, n, 1)
         np.arange(n)[np.newaxis, np.newaxis, np.newaxis, :]  # Shape: (1, 1, 1, n)
-    ).astype(int)
+    ).astype(np.uint8)
 
     return Ms
 
