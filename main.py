@@ -1,6 +1,7 @@
 import sys
 import string
 import itertools
+import pickle
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -303,6 +304,8 @@ def get_all_satisfied(equations, ast_dict, Ms):
             sys.stdout.flush()
         P = compute_table(Ms, ast)
         P_dict[formula] = P
+    with open('P_dict.pkl', 'wb') as f:
+        pickle.dump(P_dict, f)
 
     S = []
     print("evaluating the truth value of each equation for all magmas")
@@ -563,12 +566,13 @@ def implications_to_image(implications):
 
 
 def main_hasse_diagram():
-    n = 2
+    n = 3
 
     equations, ast_dict = read_all_equations(sys.stdin.readlines())
 
     Ms = collect_magmas(n)
     S = get_all_satisfied(equations, ast_dict, Ms)
+    np.save("S.npy", S)
     implications = compute_logical_implication(S)
     print(f"number of true implications for {n}-magmas", implications.sum(), "out of", implications.size)
     print(implications.astype(int))
