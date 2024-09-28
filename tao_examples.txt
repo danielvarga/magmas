@@ -1,0 +1,11 @@
+x = y
+x + y = z + w
+x + y = x
+(x + x) + y = y + x
+x + (y + z) = (w + u) + v
+x + y = x + z
+x + y = y + x
+x + (y + z) = (x + w) + u
+x + (y + z) = (x + y) + w
+x + (y + z) = (x + y) + z
+x = x

@@ -4,6 +4,8 @@ import itertools
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+
 
 
 VARIABLE_COUNT = 4 # x,y,z,w are allowed, the rest not, use equations_4.txt
@@ -425,7 +427,7 @@ def merge_equivalent_nodes_and_transitive_reduction(M):
     return G_reduced, equivalent_sets
 
 
-def visualize_graph_with_labels(G, equations, output_filename='reduced_graph.png'):
+def visualize_graph_with_labels_using_dot(G, equations, output_filename='reduced_graph.png'):
     """
     Visualize the graph G using Graphviz with custom labels from 'equations' and save it to an output file.
     
@@ -452,6 +454,94 @@ def visualize_graph_with_labels(G, equations, output_filename='reduced_graph.png
     plt.show()
 
 
+def visualize_graph_with_labels_using_plotly(G, equations):
+    # Use Graphviz layout for a hierarchical layout (like DOT)
+    pos = nx.nx_agraph.graphviz_layout(G, prog="dot")
+
+    # Extract node positions and labels
+    x_nodes = [pos[node][0] for node in G.nodes()]  # X-coordinates of nodes
+    y_nodes = [pos[node][1] for node in G.nodes()]  # Y-coordinates of nodes
+    node_labels = list(G.nodes())  # Node labels
+
+    # Create edge traces for lines between nodes
+    edge_x = []
+    edge_y = []
+
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])  # Add None to separate lines
+        edge_y.extend([y0, y1, None])
+
+    # Create edge trace (scatter for the edges)
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=1.5, color='black'),
+        hoverinfo='none',
+        mode='lines'
+    )
+
+    # Create scatter trace for hover points on edges
+    edge_hovertexts = [f'{edge[0]} -> {edge[1]}' for edge in G.edges()]
+    edge_hover_trace = go.Scatter(
+        x=[(pos[edge[0]][0] + pos[edge[1]][0]) / 2 for edge in G.edges()],  # Midpoint x
+        y=[(pos[edge[0]][1] + pos[edge[1]][1]) / 2 for edge in G.edges()],  # Midpoint y
+        text=edge_hovertexts,  # Hovertext for each edge
+        mode='markers',
+        marker=dict(size=10, color='rgba(0,0,0,0)'),  # Transparent markers
+        hoverinfo='text'
+    )
+
+    # Create node trace with hover functionality
+    node_trace = go.Scatter(
+        x=x_nodes, y=y_nodes,
+        mode='markers+text',
+        marker=dict(size=20, color='lightblue', line=dict(width=2)),
+        text=[equations[node] for node in G.nodes()],  # Text for nodes
+        hoverinfo='text',
+        textposition="bottom center"
+    )
+
+    # Add arrow annotations to represent directed edges
+    annotations = []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        
+        # Create an arrow annotation for each edge
+        annotations.append(
+            dict(
+                ax=x0, ay=y0,  # Start of the arrow (source node)
+                x=x1, y=y1,    # End of the arrow (target node)
+                xref='x', yref='y',  # Reference to the scatter plot coordinates
+                axref='x', ayref='y',
+                showarrow=True,
+                arrowhead=3,  # Type of arrowhead
+                arrowsize=2,  # Size of the arrowhead
+                arrowwidth=1.5,
+                arrowcolor='black'
+            )
+        )
+
+    # Create figure with arrows as annotations
+    fig = go.Figure(data=[edge_trace, edge_hover_trace, node_trace],
+                    layout=go.Layout(
+                        showlegend=False,
+                        hovermode='closest',
+                        margin=dict(b=0, l=0, r=0, t=0),
+                        xaxis=dict(showgrid=False, zeroline=False),
+                        yaxis=dict(showgrid=False, zeroline=False),
+                        annotations=annotations  # Add the arrows
+                    ))
+
+    # Show the figure
+    fig.update_layout(title_text="Hasse diagram", font_size=12)
+    fig.show()
+
+    fig.write_html("hasse.html")
+
+
+
 def main_hasse_diagram():
     n = 3
 
@@ -470,7 +560,7 @@ def main_hasse_diagram():
     for equivalent_set in equivalent_sets:
         print("  <=>  ".join(pp_eq(equations[eq_index]) for eq_index in sorted(equivalent_set)))
 
-    visualize_graph_with_labels(G_reduced_implications, [pp_eq(equation) for equation in equations])
+    visualize_graph_with_labels_using_plotly(G_reduced_implications, [pp_eq(equation) for equation in equations])
 
 
 def main():
